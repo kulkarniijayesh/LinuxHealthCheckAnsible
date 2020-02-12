@@ -1,0 +1,15 @@
+---
+print_all_values: "true"
+generate_csv_report: "true"
+
+#Threshold Values : Warning
+cpu_threshold_warning: 5
+memory_threshold_warning: 75
+file_system_utilization_threshold_warning: 15
+
+
+#Threshold Values : Critical
+cpu_threshold_critical: 10
+memory_threshold_critical: 85
+file_system_utilization_threshold_critical: 85
+

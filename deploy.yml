@@ -1,0 +1,7 @@
+---
+- hosts: all
+  gather_facts: True
+  roles:
+    - fetch_server_details
+  vars_files:
+    - extra_vars.yml
