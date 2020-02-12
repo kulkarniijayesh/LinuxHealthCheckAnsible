@@ -1,0 +1,136 @@
+---
+
+- name: Fetch hostname of server
+  shell: hostname
+  register: hostname_value
+
+- name: Fetch OS Version details
+  shell: echo $(cat /etc/os-release | awk -F= '$1 == "NAME" {print $2}' ) $(cat /etc/os-release | awk -F= '$1 == "VERSION" {print $2}')
+  register: os_version_value
+
+- name: Fetch uptime
+  shell: uptime -p
+  register: uptime_value
+
+#CPU Percentage section
+
+- name: Fetch CPU percentage
+  shell: echo $(( 100-$(top -bn1 | grep '%Cpu(s)' | awk -F',' '{print $4}' | awk -F'.' '{print $1}')))
+  register: cpu_percentage_value
+
+- name: Set default value to CPU status
+  set_fact: cpu_percentage_warning="false" cpu_percentage_critical="false"
+
+- name: Check CPU Warning status
+  set_fact: cpu_percentage_warning="true"
+  when: cpu_percentage_value.stdout|int >= cpu_threshold_warning
+
+- name: Check CPU Critical status
+  set_fact: cpu_percentage_critical="true"
+  when: cpu_percentage_value.stdout|int >= cpu_threshold_critical
+
+
+
+
+#Memory Percentage section
+
+- name: Fetch Memory percentage
+  shell: echo $(free | grep Mem | awk '{print $3/$2 * 100.0}')
+  register: memory_percentage_value
+
+- name: Set default value to CPU status
+  set_fact: memory_percentage_warning="false" memory_percentage_critical="false"
+
+- name: Check Memory Warning status
+  set_fact: memory_percentage_warning="true"
+  when: memory_percentage_value.stdout|int >= memory_threshold_warning
+
+- name: Check Memory Critical status
+  set_fact: memory_percentage_critical="true"
+  when: memory_percentage_value.stdout|int >= memory_threshold_critical
+
+- name: Fetch Load averages
+  shell: cat /proc/loadavg
+  register: load_average_value
+
+- name: Top 10 CPU process
+  shell: ps -eo cmd --sort=-%cpu | head
+  register: top_cpu_process_values
+
+- name: Top 10 Memory process
+  shell: ps -eo cmd --sort=-%mem | head
+  register: top_memory_process_values
+
+- name: IO status
+  shell: echo $(top -bn1 | grep '%Cpu(s)' | awk -F',' '{printf "%.0f\n", $5}')
+  register: io_status_values
+
+#File system utilization section
+
+- name: Check file system utilization
+  shell: df /dev/sda1 | awk 'FNR == 2 {print $5}' | awk -F% '{print $1}'
+  register: file_system_utilization_value
+
+- name: Set default value to file system utilization status
+  set_fact: file_system_utilization_warning="false" file_system_utilization_critical="false"
+
+- name: Check file system utilization Warning status
+  set_fact: file_system_utilization_warning="true"
+  when: file_system_utilization_value.stdout|int >= file_system_utilization_threshold_warning
+
+- name: Check file system utilization Critical status
+  set_fact: file_system_utilization_critical="true"
+  when: file_system_utilization_value.stdout|int >= file_system_utilization_threshold_critical
+
+- name: Check read only file system
+  shell: cat /proc/mounts | grep /dev/sda1 | grep ro | wc -l
+  register: read_only_count_value
+
+- name: Check if NFS mounted
+  shell: cat /proc/mounts | grep nfsd | wc -l
+  register: nfs_mount_status_value
+
+- name: Fetch number of open files
+  shell: cat /proc/sys/fs/file-nr | awk '{print $1}'
+  register: open_files_value
+
+- name: Generating html report
+  template: 
+    src: report_template.html
+    dest: /tmp/report.html
+  delegate_to: localhost
+  run_once: true
+
+#Printing all values to console, can be turned off using print_all_values value
+#in extra_vars file
+
+- name: Print all values
+  debug: 
+    msg:  VALUE {{ item.value.stdout }}
+  with_items:
+    - { name: hostname, value: "{{ hostname_value }}" }
+    - { name: OS Version, value: "{{ os_version_value }}" }
+    - { name: UpTime, value: "{{ uptime_value }}" }
+    - { name: CPU Utilization, value: "{{ cpu_percentage_value }}" }
+    - { name: Memory Utilization, value: "{{ memory_percentage_value }}" }
+    - { name: Load Average, value: "{{ load_average_value }}" }
+    - { name: Top CPU utilizing processess, value: "{{ top_cpu_process_values }}" }
+    - { name: Top Memory utilizing processess, value: "{{ top_memory_process_values }}" }
+    - { name: IO Status, value: "{{ io_status_values }}" }
+    - { name: File System utilization, value: "{{ file_system_utilization_value }}" }
+    - { name: ro filesystem, value: "{{ read_only_count_value }}" }
+    - { name: NFS mount status, value: "{{ nfs_mount_status_value }}" }
+    - { name: Number of open files, value: "{{ open_files_value }}" }
+  when: print_all_values == "true"
+
+
+#Generating csv file with parameters, can be turned off using generate_csv_report value
+#in extra_vars file
+
+- name: Generate csv report
+  template: 
+    src: report_template.csv
+    dest: /tmp/report.csv
+  when: generate_csv_report == "true"
+  run_once: true
+  delegate_to: localhost
